@@ -1,25 +1,21 @@
 import os
+import pyspark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import from_json, col, window, avg, to_timestamp
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType
-import pyspark
-
 
 # LECTURA DE VARIABLES DE ENTORNO
 KAFKA_SERVER = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
 TOPIC_NAME = os.getenv('KAFKA_TOPIC', 'urban_sensors')
 
-
-# Detecta automáticamente la versión de PySpark (ej. 3.5.1 -> 2.13)
-spark_version = pyspark.__version__
-scala_version = "2.13" if spark_version >= "3.5" else "2.12"
-
+# El paquete pyspark de PyPI viene compilado contra Scala 2.12
+# (Spark solo publica builds de Scala 2.13 en las distribuciones oficiales .tgz, no en PyPI)
 spark = SparkSession.builder \
     .appName("UrbanSensorStreaming") \
-    .config("spark.jars.packages", f"org.apache.spark:spark-sql-kafka-0-10_{scala_version}:{spark_version}") \
+    .config("spark.jars.packages", f"org.apache.spark:spark-sql-kafka-0-10_2.12:{pyspark.__version__}") \
     .getOrCreate()
 
-spark.sparkContext.setLogLevel("WARN") # Reduce el ruido visual en la consola
+spark.sparkContext.setLogLevel("WARN")  # Reduce el ruido visual en la consola
 
 # 2. DEFINIR EL ESQUEMA (ESTRICTO)
 # En Structured Streaming es obligatorio definir el esquema para evitar latencias de inferencia
@@ -40,7 +36,6 @@ raw_stream = spark.readStream \
     .load()
 
 # 4. DESSERIALIZACIÓN Y TRANSFORMACIÓN
-# Convierte el valor binario a STRING, parsea el JSON y castea el texto a tipo Timestamp
 parsed_stream = raw_stream \
     .selectExpr("CAST(value AS STRING) as json_str") \
     .select(from_json(col("json_str"), sensor_schema).alias("data")) \
@@ -50,8 +45,8 @@ parsed_stream = raw_stream \
 # 5. AGREGACIÓN CON VENTANA TEMPORAL (WINDOWING)
 aggregated_metrics = parsed_stream \
     .groupBy(
-        window(col("event_time"), "1 minute"), 
-        col("sensor_id")                        
+        window(col("event_time"), "1 minute"),
+        col("sensor_id")
     ) \
     .agg(
         avg("temperature").alias("avg_temperature"),
@@ -65,4 +60,4 @@ query = aggregated_metrics.writeStream \
     .option("truncate", "false") \
     .start()
 
-query.awaitTermination() # Mantiene vivo el proceso de streaming
+query.awaitTermination()  # Mantiene vivo el proceso de streaming

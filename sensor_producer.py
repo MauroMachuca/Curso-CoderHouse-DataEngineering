@@ -27,7 +27,7 @@ try:
             "sensor_id": sensor_id,
             "temperature": round(random.uniform(15.0, 38.0), 2),
             "humidity": round(random.uniform(30.0, 90.0), 2),
-            "air_quality_index": "Error",
+            "air_quality_index": random.randint(0, 500),  
             "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         }
         
