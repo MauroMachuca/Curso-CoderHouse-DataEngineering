@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: smart-city
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+        - containerPort: 9092
+        - containerPort: 29092
+        # Llamamos al ConfigMap tal como pide la consigna
+        envFrom:
+        - configMapRef:
+            name: data-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: smart-city
+spec:
+  selector:
+    app: kafka
+  ports:
+  - name: external
+    port: 9092
+    targetPort: 9092
+  - name: internal
+    port: 29092
+    targetPort: 29092
