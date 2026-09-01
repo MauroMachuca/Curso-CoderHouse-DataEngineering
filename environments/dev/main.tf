@@ -21,3 +21,13 @@ module "identity" {
     bucket_arn = aws_s3_bucket.raw_bucket.arn
     prefix = "raw-data/*"
 }
+
+module "flink" {
+source        = "./modules/flink"  
+  environment   = var.environment
+  stream_arn    = module.kinesis.stream_arn
+  
+  # Usa las salidas de tu bucket S3 creado en la entrega 1
+  s3_bucket_id  = aws_s3_bucket.raw_bucket.id
+  s3_bucket_arn = aws_s3_bucket.raw_bucket.arn
+}
