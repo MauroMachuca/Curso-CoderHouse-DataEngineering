@@ -31,3 +31,19 @@ source        = "./modules/flink"
   s3_bucket_id  = aws_s3_bucket.raw_bucket.id
   s3_bucket_arn = aws_s3_bucket.raw_bucket.arn
 }
+
+
+#Pre entrega 5
+# 1. Habilitar versionado en el Bucket S3 existente (Requisito para Iceberg)
+resource "aws_s3_bucket_versioning" "raw_bucket_versioning" {
+  bucket = aws_s3_bucket.raw_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# 2. Base de datos del Catálogo de AWS Glue (Lakehouse)
+resource "aws_glue_catalog_database" "lakehouse_db" {
+  name        = "lakehouse_db"
+  description = "Catálogo central para tablas Iceberg del Lakehouse"
+}

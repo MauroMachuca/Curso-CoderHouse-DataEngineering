@@ -1,59 +1,63 @@
-import json
 import os
 from pyflink.datastream import StreamExecutionEnvironment
-from pyflink.datastream.connectors.kinesis import FlinkKinesisConsumer
-from pyflink.common.serialization import SimpleStringSchema
-from pyflink.common.watermark_strategy import WatermarkStrategy
-from pyflink.common.time import Duration
-from pyflink.datastream.window import TumblingEventTimeWindows
+from pyflink.table import StreamTableEnvironment
 
 def main():
-    # 1. Configurar el entorno de ejecución
+    # 1. Configurar el entorno con Checkpointing habilitado (Vital para commits de Iceberg)
     env = StreamExecutionEnvironment.get_execution_environment()
+    env.enable_checkpointing(60000) # Checkpoint cada 1 minuto
     
-    # 2. Configurar el consumidor de Kinesis
+    t_env = StreamTableEnvironment.create(env)
+    
     stream_name = os.environ.get("STREAM_NAME", "clicks-ecommerce-dev")
     region = os.environ.get("AWS_REGION", "us-east-1")
+    bucket_name = os.environ.get("S3_BUCKET", "curso-data-engineering-datalake-raw-prueba")
     
-    consumer_config = {
-        'aws.region': region,
-        'flink.stream.initpos': 'LATEST'
-    }
+    # 2. Configurar el Catálogo de Glue para Iceberg
+    t_env.execute_sql(f"""
+        CREATE CATALOG glue_catalog WITH (
+          'type'='iceberg',
+          'warehouse'='s3a://{bucket_name}/iceberg-warehouse',
+          'catalog-impl'='org.apache.iceberg.aws.glue.GlueCatalog',
+          'io-impl'='org.apache.iceberg.aws.s3.S3FileIO'
+        )
+    """)
     
-    kinesis_consumer = FlinkKinesisConsumer(
-        stream_name,
-        SimpleStringSchema(),
-        consumer_config
-    )
+    # 3. Definir la tabla origen (Kinesis)
+    t_env.execute_sql(f"""
+        CREATE TABLE kinesis_source (
+            `user` STRING,
+            `action` STRING,
+            `timestamp` TIMESTAMP(3),
+            WATERMARK FOR `timestamp` AS `timestamp` - INTERVAL '5' SECOND
+        ) WITH (
+            'connector' = 'kinesis',
+            'stream' = '{stream_name}',
+            'aws.region' = '{region}',
+            'scan.stream.initpos' = 'LATEST',
+            'format' = 'json'
+        )
+    """)
     
-    # 3. Ingesta y Deserialización
-    raw_stream = env.add_source(kinesis_consumer)
+    # 4. Crear la tabla destino Iceberg en Glue (Si no existe)
+    # Particionada por hora para optimizar consultas (Partition Pruning)
+    t_env.execute_sql("""
+        CREATE TABLE IF NOT EXISTS glue_catalog.lakehouse_db.clicks_iceberg (
+            `user` STRING,
+            `action` STRING,
+            `event_time` TIMESTAMP(3)
+        ) PARTITIONED BY (YEAR(event_time), MONTH(event_time), DAY(event_time), HOUR(event_time))
+    """)
     
-    def parse_event(event_str):
-        data = json.loads(event_str)
-        # Retorna (usuario, 1, timestamp)
-        return (data["user"], 1, data["timestamp"])
-        
-    parsed_stream = raw_stream.map(parse_event)
-    
-    # 4. Lógica Temporal (Watermarks y Event Time)
-    # Tolerancia de 5 segundos para eventos tardíos (Skews de tiempo)
-    watermark_strategy = WatermarkStrategy.for_bounded_out_of_orderness(Duration.of_seconds(5)) \
-        .with_timestamp_assigner(lambda event, _: int(event[2][:10])) # Simplificación de Timestamp
-        
-    watermarked_stream = parsed_stream.assign_timestamps_and_watermarks(watermark_strategy)
-    
-    # 5. Procesamiento Stateful (Tumbling Window)
-    # Agrupamos por usuario y sumamos los clics en ventanas de 1 minuto
-    windowed_stream = watermarked_stream \
-        .key_by(lambda x: x[0]) \
-        .window(TumblingEventTimeWindows.of(Duration.of_minutes(1))) \
-        .reduce(lambda a, b: (a[0], a[1] + b[1], a[2]))
-        
-    # 6. Salida (En un entorno real iría a otro stream o S3. Aquí lo imprimimos en logs de CloudWatch)
-    windowed_stream.print()
-    
-    env.execute("Flink Stateful Kinesis Processor")
+    # 5. Insertar datos en streaming hacia Iceberg (IcebergSink SQL)
+    t_env.execute_sql("""
+        INSERT INTO glue_catalog.lakehouse_db.clicks_iceberg
+        SELECT 
+            `user`, 
+            `action`, 
+            `timestamp`
+        FROM kinesis_source
+    """)
 
 if __name__ == '__main__':
     main()

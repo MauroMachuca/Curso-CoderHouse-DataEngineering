@@ -40,6 +40,19 @@ resource "aws_iam_role_policy" "flink_policy" {
         Effect = "Allow"
         Action = ["logs:DescribeLogGroups", "logs:DescribeLogStreams", "logs:PutLogEvents"]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetTable",
+          "glue:CreateTable",
+          "glue:UpdateTable",
+          "glue:GetPartition",
+          "glue:CreatePartition",
+          "glue:UpdatePartition"
+        ]
+        Resource = "*"
       }
     ]
   })
