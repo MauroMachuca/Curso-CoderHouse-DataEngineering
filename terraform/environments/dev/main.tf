@@ -1,3 +1,6 @@
+# 0. Datos de la cuenta actual (evita hardcodear el Account ID)
+data "aws_caller_identity" "current" {}
+
 # 1. Invocación del Módulo de Red Base
 module "network" {
     source = "./modules/network"
@@ -6,7 +9,7 @@ module "network" {
 }
 # 2. Bucket S3 para Data Lake (Capa RAW)
 resource "aws_s3_bucket" "raw_bucket" {
-    bucket = "datalake-raw-${var.environment}-${var.account_id}"
+        bucket = "datalake-raw-${var.environment}-${data.aws_caller_identity.current.account_id}"
     force_destroy = true
     tags = {
     Name = "Data Lake Raw Bucket"
@@ -22,10 +25,16 @@ module "identity" {
     prefix = "raw-data/*"
 }
 
+module "kinesis" {
+  source      = "./modules/kinesis"
+  environment = var.environment
+}
+
 module "flink" {
 source        = "./modules/flink"  
   environment   = var.environment
   stream_arn    = module.kinesis.stream_arn
+  glue_database_name = aws_glue_catalog_database.lakehouse_db.name
   
   # Usa las salidas de tu bucket S3 creado en la entrega 1
   s3_bucket_id  = aws_s3_bucket.raw_bucket.id

@@ -1,9 +1,13 @@
+# 0. Datos de la cuenta/región actuales (evita hardcodear el Account ID)
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 # 1. Subir el código fuente a S3
 resource "aws_s3_object" "flink_code" {
   bucket = var.s3_bucket_id
   key    = "scripts/flink_processor.zip"
-  source = "../../../../../flink-app/flink_processor.py"                  
-  etag   = filemd5("../../../../../flink-app/flink_processor.py")         
+  source = "${path.module}/../../../../../flink-app/flink_processor.py"                  
+  etag   = filemd5("${path.module}/../../../../../flink-app/flink_processor.py")         
 }
 
 # 2. Rol IAM para Flink
@@ -36,10 +40,10 @@ resource "aws_iam_role_policy" "flink_policy" {
         Action = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
         Resource = ["${var.s3_bucket_arn}/*", var.s3_bucket_arn]
       },
-      {
+            {
         Effect = "Allow"
         Action = ["logs:DescribeLogGroups", "logs:DescribeLogStreams", "logs:PutLogEvents"]
-        Resource = "*"
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kinesis-analytics/flink-processor-${var.environment}:*"
       },
       {
         Effect = "Allow"
@@ -52,7 +56,11 @@ resource "aws_iam_role_policy" "flink_policy" {
           "glue:CreatePartition",
           "glue:UpdatePartition"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:catalog",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:database/${var.glue_database_name}",
+          "arn:aws:glue:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:table/${var.glue_database_name}/*"
+        ]
       }
     ]
   })

@@ -18,3 +18,11 @@ output "raw_bucket_name" {
     value = aws_s3_bucket.raw_bucket.bucket
     description = "Nombre del Bucket S3 Raw"
 }
+output "kinesis_stream_name" {
+    value = module.kinesis.stream_name
+    description = "Nombre del Kinesis Data Stream (para prueba_en_vivo.py / sensor_producer.py)"
+}
+output "kinesis_stream_arn" {
+    value = module.kinesis.stream_arn
+    description = "ARN del Kinesis Data Stream"
+}
