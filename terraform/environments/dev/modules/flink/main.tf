@@ -2,8 +2,8 @@
 resource "aws_s3_object" "flink_code" {
   bucket = var.s3_bucket_id
   key    = "scripts/flink_processor.zip"
-  source = "../../../../src/flink_processor.py"                  
-  etag   = filemd5("../../../../src/flink_processor.py")         
+  source = "../../../../../flink-app/flink_processor.py"                  
+  etag   = filemd5("../../../../../flink-app/flink_processor.py")         
 }
 
 # 2. Rol IAM para Flink

@@ -15,3 +15,9 @@ variable "account_id" {
     description = "ID de cuenta de AWS para sufijo único"
     default = "123456789012"
 }
+
+variable "redshift_admin_password" {
+  type        = string
+  description = "Contraseña para el cluster de Redshift"
+  sensitive   = true
+}
