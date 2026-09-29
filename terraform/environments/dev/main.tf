@@ -1,4 +1,4 @@
-# 0. Datos de la cuenta actual (evita hardcodear el Account ID)
+# 0. Datos de la cuenta actual (evita hardcodear o pedir el Account ID a mano)
 data "aws_caller_identity" "current" {}
 
 # 1. Invocación del Módulo de Red Base
@@ -9,7 +9,7 @@ module "network" {
 }
 # 2. Bucket S3 para Data Lake (Capa RAW)
 resource "aws_s3_bucket" "raw_bucket" {
-        bucket = "datalake-raw-${var.environment}-${data.aws_caller_identity.current.account_id}"
+    bucket = "datalake-raw-${var.environment}-${data.aws_caller_identity.current.account_id}"
     force_destroy = true
     tags = {
     Name = "Data Lake Raw Bucket"
@@ -25,6 +25,7 @@ module "identity" {
     prefix = "raw-data/*"
 }
 
+# 4. Kinesis Data Stream (ingesta de eventos de sensores)
 module "kinesis" {
   source      = "./modules/kinesis"
   environment = var.environment
@@ -41,6 +42,18 @@ source        = "./modules/flink"
   s3_bucket_arn = aws_s3_bucket.raw_bucket.arn
 }
 
+
+# 5. Redshift Serverless (namespace + workgroup + rol IAM propio)
+module "redshift" {
+  source              = "./modules/redshift"
+  environment         = var.environment
+  admin_password      = var.redshift_admin_password
+  vpc_id              = module.network.vpc_id
+  subnet_ids          = module.network.private_subnet_ids
+  kinesis_stream_arn  = module.kinesis.stream_arn
+  glue_database_name  = aws_glue_catalog_database.lakehouse_db.name
+  raw_bucket_arn      = aws_s3_bucket.raw_bucket.arn
+}
 
 #Pre entrega 5
 # 1. Habilitar versionado en el Bucket S3 existente (Requisito para Iceberg)

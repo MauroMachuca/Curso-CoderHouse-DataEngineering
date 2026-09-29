@@ -26,3 +26,15 @@ output "kinesis_stream_arn" {
     value = module.kinesis.stream_arn
     description = "ARN del Kinesis Data Stream"
 }
+output "redshift_workgroup_endpoint" {
+    value = module.redshift.workgroup_endpoint
+    description = "Endpoint de conexion del workgroup de Redshift Serverless"
+}
+output "redshift_namespace_name" {
+    value = module.redshift.namespace_name
+    description = "Nombre del namespace de Redshift Serverless"
+}
+output "redshift_workgroup_name" {
+    value = module.redshift.workgroup_name
+    description = "Nombre del workgroup de Redshift Serverless"
+}
