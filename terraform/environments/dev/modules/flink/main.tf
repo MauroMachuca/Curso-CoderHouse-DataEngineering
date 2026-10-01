@@ -2,12 +2,12 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# 1. Subir el código fuente a S3
+# 1. Subir el código empaquetado (JAR nativo de Flink con conectores) a S3
 resource "aws_s3_object" "flink_code" {
   bucket = var.s3_bucket_id
-  key    = "scripts/flink_processor.zip"
-  source = "${path.module}/../../../../../flink-app/flink_processor.py"                  
-  etag   = filemd5("${path.module}/../../../../../flink-app/flink_processor.py")         
+  key    = "scripts/lakehouse-streaming-job.jar"
+  source = "${path.module}/../../../../../flink-app/target/lakehouse-streaming-job-1.0.0.jar"
+  etag   = filemd5("${path.module}/../../../../../flink-app/target/lakehouse-streaming-job-1.0.0.jar")
 }
 
 # 2. Rol IAM para Flink
@@ -40,7 +40,7 @@ resource "aws_iam_role_policy" "flink_policy" {
         Action = ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
         Resource = ["${var.s3_bucket_arn}/*", var.s3_bucket_arn]
       },
-            {
+      {
         Effect = "Allow"
         Action = ["logs:DescribeLogGroups", "logs:DescribeLogStreams", "logs:PutLogEvents"]
         Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/kinesis-analytics/flink-processor-${var.environment}:*"
@@ -69,29 +69,31 @@ resource "aws_iam_role_policy" "flink_policy" {
 # 4. Aplicación Managed Service for Apache Flink
 resource "aws_kinesisanalyticsv2_application" "flink_app" {
   name                   = "flink-processor-${var.environment}"
-  runtime_environment    = "FLINK-1_15" # Compatible con PyFlink estándar
+  runtime_environment    = "FLINK-1_15"
   service_execution_role = aws_iam_role.flink_role.arn
 
   application_configuration {
     application_code_configuration {
       code_content {
         s3_content_location {
-          bucket_arn = var.s3_bucket_arn
-          file_key   = aws_s3_object.flink_code.key
+          bucket_arn     = var.s3_bucket_arn
+          file_key       = aws_s3_object.flink_code.key
+          object_version = aws_s3_object.flink_code.version_id
         }
       }
       code_content_type = "ZIPFILE"
     }
 
+
+
     flink_application_configuration {
-      # Tolerancia a fallos: Checkpoints activados guardados en S3
       checkpoint_configuration {
         configuration_type     = "CUSTOM"
         checkpointing_enabled  = true
         checkpoint_interval    = 60000
         min_pause_between_checkpoints = 5000
       }
-      
+
       monitoring_configuration {
         configuration_type = "CUSTOM"
         log_level          = "INFO"

@@ -25,3 +25,17 @@ aws_credentials
 .DS_Store
 .vscode/
 .idea/
+
+# ==============================================================================
+# BUILDS Y BINARIOS (MAVEN / JAVA / PYTHON)
+# ==============================================================================
+**/target/
+*.jar
+*.class
+dependency-reduced-pom.xml
+__pycache__/
+*.pyc
+*.zip
+flink-app/deploy/
+restore-config.json
+update-app.json
